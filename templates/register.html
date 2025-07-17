@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block title %}Sign Up - CloudBurst Predict{% endblock %}
+
+{% block content %}
+
+<div class="container mt-5 pt-5">
+  <div class="row justify-content-center">
+    <div class="col-md-8 col-lg-6">
+      <div class="card-custom p-5">
+
+
+    <div class="text-center mb-4">
+      <i class="fas fa-rocket fa-3x text-warning mb-3"></i>
+      <h2>Join CloudBurst Predict</h2>
+      <p class="text-muted">Start protecting lives with AI-powered weather prediction</p>
+    </div>
+
+    <form method="POST">
+      <div class="row">
+        <div class="col-md-6">
+          <div class="mb-3">
+            <label for="name" class="form-label">Full Name</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="fas fa-user"></i></span>
+              <input type="text" class="form-control" id="name" name="name" required>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-6">
+          <div class="mb-3">
+            <label for="email" class="form-label">Email Address</label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="fas fa-envelope"></i></span>
+              <input type="email" class="form-control" id="email" name="email" required>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mb-3">
+        <label for="password" class="form-label">Password</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="fas fa-lock"></i></span>
+          <input type="password" class="form-control" id="password" name="password" required minlength="6">
+        </div>
+        <div class="form-text">Password must be at least 6 characters long</div>
+      </div>
+
+      <div class="mb-3">
+        <label for="confirmPassword" class="form-label">Confirm Password</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="fas fa-lock"></i></span>
+          <input type="password" class="form-control" id="confirmPassword" required minlength="6">
+        </div>
+      </div>
+
+      <div class="mb-3 form-check">
+        <input type="checkbox" class="form-check-input" id="terms" required>
+        <label class="form-check-label" for="terms">
+          I agree to the <a href="#" class="text-primary">Terms of Service</a> and <a href="#" class="text-primary">Privacy Policy</a>
+        </label>
+      </div>
+
+      <button type="submit" class="btn btn-warning btn-lg w-100 btn-custom mb-3">
+        <i class="fas fa-rocket me-2"></i>Create Account
+      </button>
+
+      <div class="text-center mb-3">
+        <p class="mb-2">Already have an account?</p>
+        <a href="{{ url_for('login') }}" class="btn btn-outline-primary btn-custom">
+          <i class="fas fa-sign-in-alt me-2"></i>Sign In
+        </a>
+      </div>
+    </form>
+
+    <hr class="my-4">
+
+    <!-- Features Preview -->
+    <div class="row text-center">
+      <div class="col-4">
+        <i class="fas fa-gift text-success fa-2x mb-2"></i>
+        <small class="d-block">Free Tier</small>
+        <small class="text-muted">100 API calls/month</small>
+      </div>
+      <div class="col-4">
+        <i class="fas fa-shield-alt text-primary fa-2x mb-2"></i>
+        <small class="d-block">Secure</small>
+        <small class="text-muted">Enterprise security</small>
+      </div>
+      <div class="col-4">
+        <i class="fas fa-clock text-warning fa-2x mb-2"></i>
+        <small class="d-block">Real-time</small>
+        <small class="text-muted">Instant predictions</small>
+      </div>
+    </div>
+
+  </div>
+</div>
+```
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+
+<script>
+  // Password confirmation validation
+  document.getElementById('confirmPassword').addEventListener('input', function() {
+    const password = document.getElementById('password').value;
+    this.setCustomValidity(password !== this.value ? 'Passwords do not match' : '');
+  });
+
+  // Form submission check
+  document.querySelector('form').addEventListener('submit', function(e) {
+    if (document.getElementById('password').value !== document.getElementById('confirmPassword').value) {
+      e.preventDefault();
+      alert('Passwords do not match!');
+    }
+  });
+</script>
+
+{% endblock %}

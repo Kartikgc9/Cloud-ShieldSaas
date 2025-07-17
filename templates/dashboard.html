@@ -1,0 +1,320 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - CloudBurst Predict{% endblock %}
+
+{% block content %}
+<div class="container mt-5 pt-5">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="text-white mb-4">
+                <i class="fas fa-tachometer-alt me-2"></i>Welcome back, {{ user.name }}!
+            </h1>
+        </div>
+    </div>
+    
+    <!-- API Key Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card-custom p-4">
+                <h4><i class="fas fa-key me-2 text-warning"></i>Your API Key</h4>
+                <div class="row">
+                    <div class="col-md-10">
+                        <div class="input-group">
+                            <input type="password" class="form-control" id="apiKey" value="{{ user.api_key }}" readonly>
+                            <button class="btn btn-outline-secondary" onclick="toggleApiKey()">
+                                <i class="fas fa-eye" id="eyeIcon"></i>
+                            </button>
+                            <button class="btn btn-primary" onclick="copyApiKey()">
+                                <i class="fas fa-copy me-1"></i>Copy
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="progress">
+                            <div class="progress-bar {{ 'bg-danger' if user.api_calls_count >= user.api_calls_limit * 0.9 else 'bg-warning' if user.api_calls_count >= user.api_calls_limit * 0.7 else 'bg-success' }}" 
+                                 style="width: {{ (user.api_calls_count / user.api_calls_limit * 100) if user.api_calls_limit > 0 else 0 }}%">
+                                {{ "%.0f"|format((user.api_calls_count / user.api_calls_limit * 100) if user.api_calls_limit > 0 else 0) }}%
+                            </div>
+                        </div>
+                        <small class="text-muted">Usage</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Live Prediction Tool -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card-custom p-4">
+                <h4><i class="fas fa-bolt me-2 text-primary"></i>Make a Prediction</h4>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <label for="dashboardLocation" class="form-label">Location:</label>
+                            <select class="form-select" id="dashboardLocation">
+                                <option value="Dehradun, Uttarakhand">Dehradun</option>
+                                <option value="Nainital, Uttarakhand">Nainital</option>
+                                <option value="Haridwar, Uttarakhand">Haridwar</option>
+                                <option value="Rishikesh, Uttarakhand">Rishikesh</option>
+                                <option value="Tehri, Uttarakhand">Tehri</option>
+                                <option value="Chamoli, Uttarakhand">Chamoli</option>
+                                <option value="Pithoragarh, Uttarakhand">Pithoragarh</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary btn-lg" onclick="makeRealPrediction()">
+                            <i class="fas fa-search me-2"></i>Get Real Prediction
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <div id="dashboardResult" class="p-3 bg-light rounded" style="display: none;">
+                            <h5 id="dashResultLocation"></h5>
+                            <div class="mb-2">
+                                <strong>6-Hour Risk:</strong> <span id="dashResult6h"></span>
+                            </div>
+                            <div class="mb-2">
+                                <strong>12-Hour Risk:</strong> <span id="dashResult12h"></span>
+                            </div>
+                            <div class="mb-2">
+                                <strong>Risk Level:</strong> <span id="dashRiskLevel"></span>
+                            </div>
+                            <div class="mb-2">
+                                <span id="predictionTypeBadge"></span>
+                            </div>
+                            <small class="text-muted">Prediction made at <span id="dashTimestamp"></span></small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Predictions -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card-custom p-4">
+                <h4><i class="fas fa-history me-2 text-success"></i>Recent Predictions</h4>
+                {% if predictions %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Location</th>
+                                    <th>6-Hour Risk</th>
+                                    <th>12-Hour Risk</th>
+                                    <th>Risk Level</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for prediction in predictions %}
+                                <tr>
+                                    <td>
+                                        <i class="fas fa-map-marker-alt me-1"></i>
+                                        {{ prediction.location }}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ 'danger' if prediction.prediction_6h >= 0.7 else 'warning' if prediction.prediction_6h >= 0.5 else 'success' }}">
+                                            {{ "%.1f"|format(prediction.prediction_6h * 100) }}%
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ 'danger' if prediction.prediction_12h >= 0.7 else 'warning' if prediction.prediction_12h >= 0.5 else 'success' }}">
+                                            {{ "%.1f"|format(prediction.prediction_12h * 100) }}%
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ 'danger' if prediction.risk_level == 'HIGH' else 'warning' if prediction.risk_level == 'MODERATE' else 'success' }}">
+                                            {{ prediction.risk_level }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <small>{{ prediction.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No predictions yet</h5>
+                        <p class="text-muted">Make your first prediction using the tool above!</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Usage Chart -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card-custom p-4" style="max-width: 350px; margin: 0 auto;">
+                <h5><i class="fas fa-chart-doughnut me-2"></i>API Usage</h5>
+                <div style="width: 250px; height: 250px; margin: 0 auto;">
+                    <canvas id="usageChart" width="250" height="250"></canvas>
+                </div>
+                <div id="usageChartFallback" class="text-muted" style="display:none;">API usage data unavailable.</div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card-custom p-4">
+                <h5><i class="fas fa-lightbulb me-2"></i>Quick Tips</h5>
+                <ul class="list-unstyled">
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success me-2"></i>
+                        Store your API key securely in environment variables
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success me-2"></i>
+                        Use HTTPS endpoints for secure data transmission
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success me-2"></i>
+                        Monitor your usage to avoid hitting rate limits
+                    </li>
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success me-2"></i>
+                        Cache predictions for frequently requested locations
+                    </li>
+                </ul>
+                <a href="{{ url_for('pricing') }}" class="btn btn-outline-primary">
+                    <i class="fas fa-tags me-1"></i>Upgrade Plan
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// API Key visibility toggle
+function toggleApiKey() {
+    const keyInput = document.getElementById('apiKey');
+    const eyeIcon = document.getElementById('eyeIcon');
+    
+    if (keyInput.type === 'password') {
+        keyInput.type = 'text';
+        eyeIcon.className = 'fas fa-eye-slash';
+    } else {
+        keyInput.type = 'password';
+        eyeIcon.className = 'fas fa-eye';
+    }
+}
+
+// Copy API key
+function copyApiKey() {
+    const keyInput = document.getElementById('apiKey');
+    const originalType = keyInput.type;
+    keyInput.type = 'text';
+    keyInput.select();
+    document.execCommand('copy');
+    keyInput.type = originalType;
+    
+    // Show feedback
+    const button = event.target.closest('button');
+    const originalHTML = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-check me-1"></i>Copied!';
+    button.classList.add('btn-success');
+    button.classList.remove('btn-primary');
+    
+    setTimeout(() => {
+        button.innerHTML = originalHTML;
+        button.classList.remove('btn-success');
+        button.classList.add('btn-primary');
+    }, 2000);
+}
+
+// Make real prediction using API
+async function makeRealPrediction() {
+    const location = document.getElementById('dashboardLocation').value;
+    const resultDiv = document.getElementById('dashboardResult');
+    const button = event.target;
+    const apiKey = "{{ user.api_key }}";
+    
+    // Show loading state
+    button.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Predicting...';
+    button.disabled = true;
+    
+    try {
+        const response = await fetch('/api/predict', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-API-Key': apiKey
+            },
+            body: JSON.stringify({ location: location })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            // Update UI with real prediction
+            document.getElementById('dashResultLocation').textContent = data.location;
+            document.getElementById('dashResult6h').textContent = data.predictions['6_hour'].percentage;
+            document.getElementById('dashResult12h').textContent = data.predictions['12_hour'].percentage;
+            document.getElementById('dashRiskLevel').textContent = data.risk_level;
+            document.getElementById('dashRiskLevel').className = data.risk_level === 'HIGH' ? 'risk-high' : 
+                                                               data.risk_level === 'MODERATE' ? 'risk-moderate' : 'risk-low';
+            document.getElementById('dashTimestamp').textContent = new Date().toLocaleString();
+            // Show badge for real/demo prediction
+            const badge = document.getElementById('predictionTypeBadge');
+            if (data.real_prediction) {
+                badge.innerHTML = '<span class="badge bg-success">REAL DATA</span>';
+            } else {
+                badge.innerHTML = '<span class="badge bg-secondary">DEMO DATA</span>';
+            }
+            resultDiv.style.display = 'block';
+            
+            // Refresh page after 3 seconds to update stats
+            setTimeout(() => {
+                window.location.reload();
+            }, 3000);
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (error) {
+        alert('Network error: ' + error.message);
+    }
+    
+    // Reset button
+    button.innerHTML = '<i class="fas fa-search me-2"></i>Get Real Prediction';
+    button.disabled = false;
+}
+
+// Usage Chart (robust version)
+(function() {
+    const used = Number({{ user.api_calls_count or 0 }});
+    const limit = Number({{ user.api_calls_limit or 0 }});
+    const remaining = Math.max(limit - used, 0);
+    const ctx = document.getElementById('usageChart').getContext('2d');
+    const fallback = document.getElementById('usageChartFallback');
+    if (!isNaN(used) && !isNaN(limit) && limit > 0) {
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Used', 'Remaining'],
+                datasets: [{
+                    data: [used, remaining],
+                    backgroundColor: ['#e74c3c', '#27ae60'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: false,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    } else {
+        fallback.style.display = 'block';
+    }
+})();
+</script>
+{% endblock %}

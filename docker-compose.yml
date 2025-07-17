@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      FLASK_CONFIG: development
+      SECRET_KEY: your-secret-key
+      DATABASE_URL: postgresql://cloudburst:password@db:5432/cloudburst_db
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - .:/app
+      - ./models:/app/models
+    depends_on:
+      - db
+      - redis
+    command: python app.py
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: cloudburst_db
+      POSTGRES_USER: cloudburst
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  worker:
+    build: .
+    environment:
+      FLASK_CONFIG: development
+      DATABASE_URL: postgresql://cloudburst:password@db:5432/cloudburst_db
+      REDIS_URL: redis://redis:6379
+    volumes:
+      - .:/app
+      - ./models:/app/models
+    depends_on:
+      - db
+      - redis
+    command: celery -A app.celery worker --loglevel=info
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./ssl:/etc/ssl
+    depends_on:
+      - web
+
+volumes:
+  postgres_data:
+  redis_data:
