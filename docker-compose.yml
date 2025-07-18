@@ -7,9 +7,9 @@ services:
       - "5000:5000"
     environment:
       FLASK_CONFIG: development
-      SECRET_KEY: your-secret-key
-      DATABASE_URL: postgresql://cloudburst:password@db:5432/cloudburst_db
-      REDIS_URL: redis://redis:6379
+      SECRET_KEY: ${SECRET_KEY}
+      DATABASE_URL: postgresql://cloudburst:${DB_PASSWORD}@db:5432/cloudburst_db
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
     volumes:
       - .:/app
       - ./models:/app/models
@@ -23,7 +23,7 @@ services:
     environment:
       POSTGRES_DB: cloudburst_db
       POSTGRES_USER: cloudburst
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
@@ -33,6 +33,7 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
 

@@ -24,10 +24,10 @@ from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
 
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your-secret-key-change-this'
+# app.config['SECRET_KEY'] = 'your-secret-key-change-this' # Removed as per edit hint
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///cloudburst_saas.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config.from_object('config.Config')
+app.config.from_object('config.Config') # Load SECRET_KEY from config.py
 mail = Mail(app)
 
 # Password reset serializer
@@ -52,6 +52,7 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
     email_verified = db.Column(db.Boolean, default=False)
+    role = db.Column(db.String(20), default='user')  # New field for RBAC
 
 class PredictionLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -415,7 +416,7 @@ def pricing():
 @login_required
 def admin():
     """Admin dashboard"""
-    if current_user.email != 'admin@cloudburstpredict.com':  # Simple admin check
+    if current_user.role != 'admin':
         return redirect(url_for('dashboard'))
 
     users = User.query.all()
@@ -494,7 +495,8 @@ def init_db():
                 password_hash=generate_password_hash('admin123'),
                 api_key=str(uuid.uuid4()),
                 subscription_type='admin',
-                api_calls_limit=10000
+                api_calls_limit=10000,
+                role='admin' # Ensure role is set
             )
             db.session.add(admin)
             db.session.commit()
