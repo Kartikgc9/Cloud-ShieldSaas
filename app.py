@@ -21,13 +21,27 @@ from functools import wraps
 import uuid
 from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Initialize Flask app
 app = Flask(__name__)
-# app.config['SECRET_KEY'] = 'your-secret-key-change-this' # Removed as per edit hint
+
+# Database configuration
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///cloudburst_saas.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config.from_object('config.Config') # Load SECRET_KEY from config.py
+
+# Load configuration from config.py
+app.config.from_object('config.Config')
+
+# Ensure SECRET_KEY is set (fallback if not in environment)
+if not app.config.get('SECRET_KEY'):
+    app.config['SECRET_KEY'] = 'your-super-secret-key-change-this-in-production-12345'
+    print("Warning: Using fallback SECRET_KEY. Set SECRET_KEY environment variable for production.")
+
+# Initialize Mail
 mail = Mail(app)
 
 # Password reset serializer
@@ -119,7 +133,6 @@ class CloudburstPredictionService:
             weather_data['pressure'],
             weather_data['pressure']  # Using pressure for both pressure fields
         ])
-
         # Create mock GAF-like data for demonstration
         mock_gaf = np.random.random((1, 6, 256, 256)).astype(np.float32)
         return mock_gaf
@@ -129,20 +142,20 @@ class CloudburstPredictionService:
         try:
             # Get weather data
             weather_data = self.get_weather_data(location)
-
+            
             # Prepare input data
             input_data = self.prepare_prediction_data(weather_data)
-
+            
             # Make predictions
             pred_6h = 0.5  # Default values if models not loaded
             pred_12h = 0.5
-
+            
             if self.model_6h is not None:
                 pred_6h = float(self.model_6h.predict(input_data, verbose=0)[0][0])
-
+            
             if self.model_12h is not None:
                 pred_12h = float(self.model_12h.predict(input_data, verbose=0)[0][0])
-
+            
             # Determine risk level (updated thresholds)
             max_risk = max(pred_6h, pred_12h)
             if max_risk >= 0.9:
@@ -151,7 +164,7 @@ class CloudburstPredictionService:
                 risk_level = "MODERATE"
             else:
                 risk_level = "LOW"
-
+            
             return {
                 'location': location,
                 'predictions': {
@@ -168,7 +181,6 @@ class CloudburstPredictionService:
                 'weather_data': weather_data,
                 'timestamp': datetime.now().isoformat()
             }
-
         except Exception as e:
             return {'error': str(e)}
 
@@ -181,15 +193,15 @@ def check_api_limit(f):
     def decorated_function(*args, **kwargs):
         # Get API key from request
         api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
-
+        
         if not api_key:
             return jsonify({'error': 'API key required'}), 401
-
+        
         # Find user by API key
         user = User.query.filter_by(api_key=api_key).first()
         if not user:
             return jsonify({'error': 'Invalid API key'}), 401
-
+        
         # Check rate limit
         if user.api_calls_count >= user.api_calls_limit:
             return jsonify({
@@ -197,11 +209,11 @@ def check_api_limit(f):
                 'limit': user.api_calls_limit,
                 'calls_made': user.api_calls_count
             }), 429
-
+        
         # Increment API call count
         user.api_calls_count += 1
         db.session.commit()
-
+        
         return f(user, *args, **kwargs)
     return decorated_function
 
@@ -219,7 +231,7 @@ def index():
         )
         db.session.add(stats)
         db.session.commit()
-
+    
     return render_template('index.html', stats=stats)
 
 @app.route('/register', methods=['GET', 'POST'])
@@ -229,12 +241,12 @@ def register():
         email = request.form['email']
         name = request.form['name']
         password = request.form['password']
-
+        
         # Check if user exists
         if User.query.filter_by(email=email).first():
             flash('Email already registered')
             return redirect(url_for('register'))
-
+        
         # Create new user
         user = User(
             email=email,
@@ -242,19 +254,20 @@ def register():
             password_hash=generate_password_hash(password),
             api_key=str(uuid.uuid4())
         )
-
+        
         db.session.add(user)
         db.session.commit()
-
+        
         # Send verification email
         token = serializer.dumps(user.email, salt='email-verify-salt')
         verify_url = url_for('verify_email', token=token, _external=True)
         msg = Message('Verify Your Email', recipients=[user.email])
         msg.body = f'Welcome to CloudBurst Predict! Please verify your email by clicking the link: {verify_url}\nIf you did not register, please ignore this email.'
         mail.send(msg)
+        
         flash('Registration successful! Please check your email to verify your account.')
         return redirect(url_for('login'))
-
+    
     return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -263,25 +276,27 @@ def login():
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
-
+        
         user = User.query.filter_by(email=email).first()
-
+        
         if user and check_password_hash(user.password_hash, password):
             if not user.email_verified:
                 flash('Please verify your email before logging in. Check your inbox.')
                 return redirect(url_for('login'))
+            
             # Send welcome email on first login
             if user.last_login is None:
                 msg = Message('Welcome to CloudBurst Predict!', recipients=[user.email])
                 msg.body = f'Hi {user.name},\n\nWelcome to CloudBurst Predict! We are excited to have you on board.\n\nYou can now access your dashboard and start using our cloudburst prediction services.\n\nIf you have any questions, feel free to reply to this email.\n\nBest regards,\nThe CloudBurst Predict Team'
                 mail.send(msg)
+            
             login_user(user)
             user.last_login = datetime.utcnow()
             db.session.commit()
             return redirect(url_for('dashboard'))
         else:
             flash('Invalid email or password')
-
+    
     return render_template('login.html')
 
 @app.route('/logout')
@@ -299,26 +314,26 @@ def dashboard():
     recent_predictions = PredictionLog.query.filter_by(user_id=current_user.id)\
                                           .order_by(PredictionLog.created_at.desc())\
                                           .limit(10).all()
-
+    
     return render_template('dashboard.html', 
-                          user=current_user, 
-                          predictions=recent_predictions)
+                         user=current_user, 
+                         predictions=recent_predictions)
 
 @app.route('/api/predict', methods=['POST'])
 @check_api_limit
 def api_predict(user):
     """API endpoint for predictions"""
     data = request.get_json()
-
+    
     if not data or 'location' not in data:
         return jsonify({'error': 'Location required'}), 400
-
+    
     location = data['location']
-
+    
     # Helper: check if user is premium or admin
     def is_premium(user):
         return user.subscription_type in ['premium', 'admin']
-
+    
     if is_premium(user):
         # Real prediction for premium/admin users
         result = prediction_service.predict_cloudburst(location)
@@ -329,15 +344,18 @@ def api_predict(user):
         import hashlib, random
         seed = int(hashlib.sha256(location.encode()).hexdigest(), 16) % (10 ** 8)
         random.seed(seed)
+        
         pred6h = random.uniform(0.2, 0.8)
         pred12h = random.uniform(0.2, 0.8)
         max_risk = max(pred6h, pred12h)
+        
         if max_risk >= 0.7:
             risk_level = "HIGH"
         elif max_risk >= 0.5:
             risk_level = "MODERATE"
         else:
             risk_level = "LOW"
+        
         result = {
             'location': location,
             'predictions': {
@@ -354,7 +372,7 @@ def api_predict(user):
             'timestamp': datetime.now().isoformat(),
             'real_prediction': False
         }
-
+    
     if 'error' not in result and result.get('real_prediction'):
         # Log prediction only for real predictions
         log_entry = PredictionLog(
@@ -365,12 +383,14 @@ def api_predict(user):
             risk_level=result['risk_level']
         )
         db.session.add(log_entry)
+        
         # Update system stats
         stats = SystemStats.query.first()
         if stats:
             stats.total_predictions += 1
+        
         db.session.commit()
-
+    
     return jsonify(result)
 
 @app.route('/api/locations')
@@ -379,14 +399,14 @@ def api_locations(user):
     """API endpoint to get supported locations"""
     locations = [
         'Dehradun, Uttarakhand',
-        'Nainital, Uttarakhand', 
+        'Nainital, Uttarakhand',
         'Haridwar, Uttarakhand',
         'Rishikesh, Uttarakhand',
         'Tehri, Uttarakhand',
         'Chamoli, Uttarakhand',
         'Pithoragarh, Uttarakhand'
     ]
-
+    
     return jsonify({
         'locations': locations,
         'total': len(locations)
@@ -397,7 +417,7 @@ def api_locations(user):
 def api_stats(user):
     """API endpoint for system statistics"""
     stats = SystemStats.query.first()
-
+    
     return jsonify({
         'total_predictions': stats.total_predictions if stats else 0,
         'total_users': User.query.count(),
@@ -418,10 +438,10 @@ def admin():
     """Admin dashboard"""
     if current_user.role != 'admin':
         return redirect(url_for('dashboard'))
-
+    
     users = User.query.all()
     predictions = PredictionLog.query.order_by(PredictionLog.created_at.desc()).limit(50).all()
-
+    
     return render_template('admin.html', users=users, predictions=predictions)
 
 @app.route('/reset_password_request', methods=['GET', 'POST'])
@@ -429,16 +449,17 @@ def reset_password_request():
     if request.method == 'POST':
         email = request.form['email']
         user = User.query.filter_by(email=email).first()
+        
         if user:
             token = serializer.dumps(user.email, salt='password-reset-salt')
             reset_url = url_for('reset_password', token=token, _external=True)
             msg = Message('Password Reset Request', recipients=[user.email])
             msg.body = f'Click the link to reset your password: {reset_url}\nIf you did not request this, please ignore this email.'
             mail.send(msg)
-            flash('A password reset link has been sent to your email.')
-            return redirect(url_for('login'))
-        else:
-            flash('No account found with that email.')
+            
+        flash('A password reset link has been sent to your email.')
+        return redirect(url_for('login'))
+        
     return render_template('reset_password_request.html')
 
 @app.route('/reset_password/<token>', methods=['GET', 'POST'])
@@ -448,19 +469,21 @@ def reset_password(token):
     except (SignatureExpired, BadSignature):
         flash('The password reset link is invalid or has expired.')
         return redirect(url_for('reset_password_request'))
+    
     user = User.query.filter_by(email=email).first()
     if not user:
         flash('Invalid user.')
         return redirect(url_for('reset_password_request'))
+    
     if request.method == 'POST':
         password = request.form['password']
         user.password_hash = generate_password_hash(password)
         db.session.commit()
         flash('Your password has been updated. Please log in.')
         return redirect(url_for('login'))
+    
     return render_template('reset_password.html')
 
-# Add verify_email route
 @app.route('/verify_email/<token>')
 def verify_email(token):
     try:
@@ -468,13 +491,16 @@ def verify_email(token):
     except (SignatureExpired, BadSignature):
         flash('The verification link is invalid or has expired.')
         return redirect(url_for('login'))
+    
     user = User.query.filter_by(email=email).first()
     if not user:
         flash('Invalid user.')
         return redirect(url_for('login'))
+    
     if user.email_verified:
         flash('Email already verified. Please log in.')
         return redirect(url_for('login'))
+    
     user.email_verified = True
     db.session.commit()
     flash('Your email has been verified! You can now log in.')
@@ -485,7 +511,7 @@ def init_db():
     """Initialize database and create admin user if needed"""
     with app.app_context():
         db.create_all()
-
+        
         # Create admin user if not exists
         admin = User.query.filter_by(email='admin@cloudburstpredict.com').first()
         if not admin:
@@ -496,7 +522,8 @@ def init_db():
                 api_key=str(uuid.uuid4()),
                 subscription_type='admin',
                 api_calls_limit=10000,
-                role='admin' # Ensure role is set
+                role='admin',
+                email_verified=True  # Admin is pre-verified
             )
             db.session.add(admin)
             db.session.commit()

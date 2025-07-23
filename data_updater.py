@@ -5,6 +5,7 @@ import json
 from datetime import datetime, timedelta
 import time
 import os
+from dotenv import load_dotenv
 from pyts.image import GramianAngularField
 import warnings
 warnings.filterwarnings('ignore')
@@ -59,40 +60,63 @@ class UttarakhandDataUpdater:
             'msl_pressure'   # hPa
         ]
         
-    def fetch_imd_data(self, station, start_date, end_date):
-        """Fetch data from IMD AWS"""
+    def fetch_weatherapi_com_data(self, station, api_key, days=7):
+        """Fetch historical data from WeatherAPI.com"""
         station_info = self.uttarakhand_stations[station]
+        all_data = []
         
-        # IMD AWS API endpoint
-        url = f"http://aws.imd.gov.in:8091/AWS/dataview.php"
-        params = {
-            'a': 'AWS',
-            'b': 'UTTARAKHAND',
-            'c': station_info['imd_code'],
-            'd': station_info['aws_id'],
-            'e': start_date.strftime('%Y-%m-%d'),
-            'f': end_date.strftime('%Y-%m-%d'),
-            'g': 'ALL_HOUR',
-            'h': 'ALL_MINUTE'
-        }
+        print(f"Fetching WeatherAPI.com data for {station}...")
         
-        try:
-            print(f"Fetching IMD data for {station}...")
-            response = requests.get(url, params=params, timeout=30)
+        for i in range(days):
+            date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+            url = f"http://api.weatherapi.com/v1/history.json"
+            params = {
+                'key': api_key,
+                'q': f"{station_info['lat']},{station_info['lon']}",
+                'dt': date
+            }
             
-            if response.status_code == 200:
-                # Parse IMD response (usually HTML table)
-                data = self.parse_imd_response(response.text, station)
-                print(f"✓ Fetched {len(data)} records from IMD for {station}")
-                return data
-            else:
-                print(f"✗ IMD fetch failed for {station}: {response.status_code}")
+            try:
+                response = requests.get(url, params=params, timeout=30)
+                if response.status_code == 200:
+                    data = response.json()
+                    processed = self.process_weatherapi_com_data(data, station)
+                    if processed:
+                        all_data.extend(processed)
+                else:
+                    print(f"✗ WeatherAPI.com fetch failed for {station}: {response.status_code} - {response.text}")
+                    return None # Fail fast if one day fails
+            except Exception as e:
+                print(f"✗ Error fetching WeatherAPI.com data for {station}: {e}")
                 return None
-                
-        except Exception as e:
-            print(f"✗ Error fetching IMD data for {station}: {e}")
+        
+        print(f"✓ Fetched {len(all_data)} records from WeatherAPI.com for {station}")
+        return all_data
+
+    def process_weatherapi_com_data(self, data, station):
+        """Process WeatherAPI.com API response"""
+        if 'forecast' not in data or 'forecastday' not in data['forecast'] or not data['forecast']['forecastday']:
             return None
-    
+            
+        processed_data = []
+        day_data = data['forecast']['forecastday'][0]
+        
+        for hour_data in day_data['hour']:
+            record = {
+                'station': station,
+                'datetime': datetime.fromisoformat(hour_data['time']),
+                'rainfall': hour_data.get('precip_mm', 0),
+                'temperature': hour_data['temp_c'],
+                'humidity': hour_data['humidity'],
+                'wind_speed': hour_data['wind_kph'] / 3.6,  # Convert kph to m/s
+                'pressure': hour_data['pressure_mb'],
+                'msl_pressure': hour_data['pressure_mb'], # Approximation
+                'weather_main': hour_data['condition']['text'],
+            }
+            processed_data.append(record)
+            
+        return processed_data
+
     def fetch_openweather_data(self, station, api_key, days=7):
         """Fetch historical data from OpenWeatherMap"""
         station_info = self.uttarakhand_stations[station]
@@ -156,7 +180,7 @@ class UttarakhandDataUpdater:
             
         return processed_data
     
-    def fetch_current_weather_multiple_sources(self, api_key=None):
+    def fetch_current_weather_multiple_sources(self, weatherapi_key=None, openweather_key=None):
         """Fetch current weather from multiple sources"""
         print("🌦️  Fetching Current Uttarakhand Weather Data")
         print("="*60)
@@ -166,22 +190,22 @@ class UttarakhandDataUpdater:
         for station in self.uttarakhand_stations.keys():
             print(f"\nProcessing {station}...")
             
-            # Try IMD first
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=7)
+            station_data = None
             
-            imd_data = self.fetch_imd_data(station, start_date, end_date)
-            if imd_data:
-                all_data.extend(imd_data)
+            # Try WeatherAPI.com first
+            if weatherapi_key:
+                station_data = self.fetch_weatherapi_com_data(station, weatherapi_key, days=7)
             
-            # Try OpenWeatherMap if API key provided
-            if api_key:
-                ow_data = self.fetch_openweather_data(station, api_key, days=7)
-                if ow_data:
-                    all_data.extend(ow_data)
+            # Fallback to OpenWeatherMap
+            if not station_data and openweather_key:
+                print(f"WeatherAPI.com failed for {station}, falling back to OpenWeatherMap...")
+                station_data = self.fetch_openweather_data(station, openweather_key, days=7)
+
+            if station_data:
+                all_data.extend(station_data)
             
             # Add delay between stations
-            time.sleep(2)
+            time.sleep(1)
         
         if all_data:
             df = pd.DataFrame(all_data)
@@ -192,7 +216,7 @@ class UttarakhandDataUpdater:
             print(f"\n✓ Saved {len(df)} records to {filename}")
             return df
         else:
-            print("\n⚠️  No data fetched. Generating sample data for demonstration...")
+            print("\n⚠️  No real-time data fetched. Generating sample data for demonstration...")
             return self.generate_sample_uttarakhand_data()
     
     def generate_sample_uttarakhand_data(self):
@@ -342,13 +366,22 @@ def main():
     
     updater = UttarakhandDataUpdater()
     
-    # Option to use OpenWeatherMap API
-    print("\nDo you have an OpenWeatherMap API key? (Get free key from openweathermap.org)")
-    use_api = input("Enter API key (or press Enter to skip): ").strip()
-    api_key = use_api if use_api else None
-    
+    # Load environment variables from .env file
+    load_dotenv()
+    weatherapi_key = os.getenv("WEATHERAPI_COM_KEY")
+    openweather_key = os.getenv("OPENWEATHER_API_KEY")
+
+    # Prompt for keys if not found in .env
+    if not weatherapi_key:
+        print("\nEnter WeatherAPI.com API key (get free key from weatherapi.com)")
+        weatherapi_key = input("Enter key (or press Enter to skip): ").strip()
+
+    if not openweather_key:
+        print("\nEnter OpenWeatherMap API key (get free key from openweathermap.org)")
+        openweather_key = input("Enter key (or press Enter to skip): ").strip()
+        
     # Fetch current weather data
-    weather_df = updater.fetch_current_weather_multiple_sources(api_key)
+    weather_df = updater.fetch_current_weather_multiple_sources(weatherapi_key, openweather_key)
     
     if weather_df is not None and not weather_df.empty:
         # Prepare training data
