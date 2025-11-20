@@ -1,11 +1,90 @@
-venv/
+# Python
 __pycache__/
-.env*
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual Environments
+venv/
+env/
+ENV/
+cloud/
+.venv
+
+# Environment Variables (keep private)
+.env
+.env.*
+!.env.example
+
+# Database Files
+*.db
+*.sqlite
 *.sqlite3
 cloudburst_saas.db
+instance/*.db
+
+# Large Model Files (exclude retrained models >100MB, keep production models)
+Model6h_*.h5
+Model12h_*.h5
+
+# Large Data Files (exclude multi-GB GAF datasets)
+uttarakhand_gaf_data_*.npy
+
+# Note: Production models (Model6.h5, Model12.h5) and smaller .npy files
+# are tracked by Git LFS (see .gitattributes)
+
+# Directories
 data/
 models/
-*.h5
-*.npy
 logs/
-cloud/
+
+# SSH Keys and Credentials
+*.pem
+*.key
+key.txt
+key.txt.pub
+*.ppk
+credentials.json
+
+# IDE and Editor Files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# System Files
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Temporary Files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Coverage Reports
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Documentation Builds
+docs/_build/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Node modules (if any frontend dependencies)
+node_modules/
